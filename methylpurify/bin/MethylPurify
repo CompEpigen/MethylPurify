@@ -80,27 +80,27 @@ def EM(READ):
 			alpha1_new = nu_alpha/len(READ)
 			
 			if (abs(m1_new - m1) < 0.01 and abs(m2_new - m2) < 0.01 and abs(alpha1_new - alpha1) < 0.01) or steps > 200: ## num of steps <= 200
-			if (abs(m1_new - m1) < 0.01 and abs(m2_new - m2) < 0.01 and abs(alpha1_new - alpha1) < 0.01):
+				if (abs(m1_new - m1) < 0.01 and abs(m2_new - m2) < 0.01 and abs(alpha1_new - alpha1) < 0.01):
 
-						# alpha1 is the smaller one
-						if (alpha1 > 0.5): # switch
-							alpha1 = 1 - alpha1
-							temp = m1
-							m1 = m2
-							m2 = temp
-				return (m1,m2,alpha1)            
-				break
-			elif steps > 200:
-				#print "m1,m2,alpha1 not converge in 200 steps by EM calculating!\n"
-				
-				# alpha1 is the smaller one
-						if (alpha1 > 0.5): # switch
-							alpha1 = 1 - alpha1
-							temp = m1
-							m1 = m2
-							m2 = temp
-				return (m1,m2,alpha1)            
-				break
+					# alpha1 is the smaller one
+					if (alpha1 > 0.5): # switch
+						alpha1 = 1 - alpha1
+						temp = m1
+						m1 = m2
+						m2 = temp
+					return (m1,m2,alpha1)            
+					break
+				elif steps > 200:
+					#print "m1,m2,alpha1 not converge in 200 steps by EM calculating!\n"
+					
+					# alpha1 is the smaller one
+					if (alpha1 > 0.5): # switch
+						alpha1 = 1 - alpha1
+						temp = m1
+						m1 = m2
+						m2 = temp
+					return (m1,m2,alpha1)            
+					break
 			m1 = m1_new
 			m2 = m2_new
 			alpha1 = alpha1_new
@@ -164,22 +164,22 @@ def bootstrap(READ,repeat_times):
 	M2 = [0]*repeat_times
 	alpha1 = [0]*repeat_times
 	for i in range(repeat_times):
-	SAMPLE_key=[]
-	sample_times = min(1000,num_of_read)
-	#print sample_times
-	for j in range(sample_times):       
-		SAMPLE_key.append(random.sample(READ.keys(),1)[0])
+		SAMPLE_key=[]
+		sample_times = min(1000,num_of_read)
+		#print sample_times
+		for j in range(sample_times):       
+			SAMPLE_key.append(random.sample(READ.keys(),1)[0])
 
 		SAMPLE = {}
 		for key in SAMPLE_key:
 			SAMPLE[key] = READ[key]
 		(m1_s,m2_s,al_s) = EM(SAMPLE)
 
-	alpha1[i] = al_s
-	M1[i] = m1_s
-	M2[i] = m2_s
+		alpha1[i] = al_s
+		M1[i] = m1_s
+		M2[i] = m2_s
 		del SAMPLE_key
-	del SAMPLE
+		del SAMPLE
 
 	var_alpha = numpy.var(alpha1)
 	var_M1 = numpy.var(M1)
