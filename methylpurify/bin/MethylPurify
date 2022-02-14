@@ -246,19 +246,30 @@ def get_mixingRatio(input_file,output_file,bin_length,coverage_cutoff,repeat_tim
 		arr = line.strip().split("\t")
 		if arr[0].startswith("@") or not arr:
 			continue
-		if len(arr[5]) != 3: ## unmatched reads, reads with mismatch, clipping , Qian 2014.8, change needed for sequence too long, say 100bp
-			continue
+		#if len(arr[5]) != 3:  unmatched reads, reads with mismatch, clipping , Qian 2014.8, change needed for sequence too long, say 100bp
+		#	continue
 		
 		readName = arr[0]
 		chrN = arr[2]
-		len_read = int(arr[5][:-1])
+		for a in arr:
+			if "XM:" in a:
+				XM_tag = a[5:]
+
+		try:
+			XM_tag
+		except NameError:
+			sys.stderr.write("XM tag was not detected in some reads. Please, check if the methylation call is given with XM tag in the reads within the input sam/bam file")
+
+		len_read = len(XM_tag)
 		start = int(arr[3])
 		end = start + len_read
 
 		read = arr[9]
 		refseq = str.upper(f[chrN][start-1:start-1+len_read].__str__())
+		
+		# Strand is not required, since methylation call is given in XM tag
 		#strand = arr[14] ## Qian change here, from 12 to 14(or -1, the last column)
-		strand = arr[-1] ## Qian change here, from 12 to 14(or -1, the last column)
+		#strand = arr[-1] ## Qian change here, from 12 to 14(or -1, the last column)
 
 		if chrN != chr_current or start - bin_start > bin_length: ## it is a new bin
 
@@ -288,7 +299,7 @@ def get_mixingRatio(input_file,output_file,bin_length,coverage_cutoff,repeat_tim
 				chr_current = chrN
 				bin_start = start
 
-				(n_me,n_all) = get_methyl(read,strand,refseq)
+				(n_me,n_all) = get_methyl_XM(XM_tag)
 				
 				READ[readName] = {}
 				READ[readName]["Methy"] = n_me
@@ -298,7 +309,7 @@ def get_mixingRatio(input_file,output_file,bin_length,coverage_cutoff,repeat_tim
 
 		else: ## an old bin just add reads
 
-			(n_me,n_all) = get_methyl(read,strand,refseq)
+			(n_me,n_all) = get_methyl_XM(XM_tag)
 
 			READ[readName] = {}
 			READ[readName]["Methy"] = n_me
@@ -343,6 +354,17 @@ def candidate_selection(READ):
 		return "T"
 	else:
 		return "F"
+
+def get_methyl_XM(XM):
+	n_me = 0
+	n_ume = 0
+	for n in XM:
+		if n == "z": 
+			n_ume += 1
+		elif n == "Z": 
+			n_me += 1
+
+	return(n_me, n_me+n_ume)
 		
 	
 def get_methyl(read,strand,refseq):
@@ -454,19 +476,28 @@ def get_methyl_profile(input_file,output_file,alpha1,coverage_cutoff,bin_length,
 
 		if arr[0].startswith("@") or not arr:
 			continue
-		if len(arr[5]) != 3: ## unmatched reads, reads with mismatch, clipping , Qian 2014.8, change needed for sequence too long, say 100bp
-			continue
+		#if len(arr[5]) != 3: ## unmatched reads, reads with mismatch, clipping , Qian 2014.8, change needed for sequence too long, say 100bp
+		#	continue
 		
 		readName = arr[0]
 		chrN = arr[2]
-		len_read = int(arr[5][:-1])
+		for a in arr:
+			if "XM:" in a:
+				XM_tag = a[5:]
+
+		try:
+			XM_tag
+		except NameError:
+			sys.stderr.write("XM tag was not detected in some reads. Please, check if the methylation call is given with XM tag in the reads within the input sam/bam file")
+
+		len_read = len(XM_tag)
 		start = int(arr[3])
 		end = start + len_read
 
 		read = arr[9]
 		refseq = str.upper(str(f[chrN][start-1:start-1+len_read]))
 		#strand = arr[14] ## Qian change here, from 12 to 14(or -1, the last column)
-		strand = arr[-1] ## Qian change here, from 12 to 14(or -1, the last column)
+		#strand = arr[-1] ## Qian change here, from 12 to 14(or -1, the last column)
 			
 		if chrN != chr_current or start - bin_start > bin_length: ## it is a new bin
 
@@ -500,9 +531,9 @@ def get_methyl_profile(input_file,output_file,alpha1,coverage_cutoff,bin_length,
 			# update the bin information
 			READ = {}
 			chr_current = chrN
-			bin_start = start/bin_length * bin_length
+			bin_start = int(start/bin_length * bin_length)
 
-			(n_me,n_all) = get_methyl(read,strand,refseq)
+			(n_me,n_all) = get_methyl_XM(XM_tag)
 			
 			READ[readName] = {}
 			READ[readName]["Methy"] = n_me
@@ -560,6 +591,8 @@ def main():
 				  help="CpG island bed file")
 	op.add_option("--cnv",dest="cnv",action = "store_true", default=False,
 				  help="use cnv data or not, only available for hg19 now")
+	op.add_option("-o",dest="out_dir",type = "str", default=None,
+				  help="Directory to save results")
 	(options,args) = op.parse_args()
 
 	
@@ -575,16 +608,17 @@ def main():
 	genome = options.genome ## corresponding genome fasta
 	cgi = options.cgi
 	cnv = options.cnv ## boolean variable
+	fn = options.out_dir
 
 	if not os.path.exists(cgi):
-		print >>sys.stderr, "Not found CpG island files"
+		sys.stderr.write("Not found CpG island files")
 		sys.exit(1)
 
 	if not os.path.exists(genome):
-		print >>sys.stderr, "Not found fasta files"
+		sys.stderr.write("Not found fasta files")
 		sys.exit(1)
 	if not os.path.exists(filename):
-		print >>sys.stderr, "Not found bam files"
+		sys.stderr.write("Not found bam files")
 		sys.exit(1)
 	
 	fn = os.path.split(filename)[1].strip(".bam") ## only file name
@@ -595,27 +629,15 @@ def main():
 	if not os.path.isdir(fn):
 		os.mkdir(fn)
 	path = fn
+	# CGI filtering part was removed
+	Input = os.path.join(fn, fn+".sam")
 
- #   CMD_map_to_CGI = "samtools view -h -b -L "+resource_filename("methylpurify", "db/CGI_%s_slop1000.bed"%species) + " " + filename + " > "+ fn+".CGI.bam"
-	if not os.path.exists(os.path.join(fn, fn+".CGI.bam")):
-		CMD_map_to_CGI = "samtools view -h -b -L "+ cgi + " " + filename + " > "+ os.path.join(fn, fn+".CGI.bam")
-		info("Runing: %s" % CMD_map_to_CGI, path)
-		os.system(CMD_map_to_CGI)
-	
-	if not os.path.exists(os.path.join(fn, fn+".CGI.sorted.bam")):
-		CMD_sort = "samtools sort "+ os.path.join(fn, fn + ".CGI.bam") + " " +" " + os.path.join(fn, fn+".CGI.sorted")
-		info("Runing: %s" % CMD_sort, path)
-		os.system(CMD_sort)
-
-	if not os.path.exists(os.path.join(fn, fn+".CGI.sorted.sam")):
-		CMD_bam_to_sam = "samtools view -h "+ os.path.join(fn, fn+".CGI.sorted.bam") + " > " + os.path.join(fn, fn+".CGI.sorted.sam")
+	if not os.path.exists(os.path.join(fn, fn+".sam")):
+		CMD_bam_to_sam = "samtools view -h "+ filename + " > " + os.path.join(fn, fn+".sam")
 		info("Running: %s" % CMD_bam_to_sam,path)
 		os.system(CMD_bam_to_sam)
 
-	##os.system("rm "+fn+".CGI.bam")
 
-	#-------- step 2: get mixingRatio -----------#
-	Input = os.path.join(fn, fn+".CGI.sorted.sam")
 	Output_mixRatio = os.path.join(fn, fn+"Informative_bins.bed")
 
 	if not os.path.exists(os.path.join(fn, fn+"Informative_bins.bed")):
@@ -644,22 +666,6 @@ def main():
 	Output_methylProfile = os.path.join(fn, "MethylProfile.bed")
 	info("Running get_methyl_profile:\n MixingRatio:%s\nInput:%s\nOutput:%s\nBin_length:%s\nGenome:%s\n" % (MixRatio,Input,Output_methylProfile,bin_length,genome), path)
 	get_methyl_profile(Input,Output_methylProfile,MixRatio,coverage_cutoff,bin_length,genome)
-
-
-	#------- Step 4. Merge -------------------
-##    merge(In = MLEM_out, Out = "DMR.out", path)
-
-	#-------- step5: remove files  --------#
-	
-##    CMD_rm_sorted_bam = "rm "+fn+".CGI.sorted.bam"
-##    info("Run: %s" % CMD_rm_sorted_bam, path)
-##    os.system(CMD_rm_sorted_bam)
-##
-##    CMD_rm_sam = "rm "+ fn+".CGI.sorted.sam"
-##    info("Run: %s" % CMD_rm_sam,path)
-##    os.system(CMD_rm_sam)
-				  
-
 	
 			
 if __name__ == "__main__":
